@@ -83,11 +83,11 @@ export default function PollView() {
   return (
     <div className="container">
       <div className="card">
-        <h2>{poll.question}</h2>
-
-        <div className="share-box" style={{ marginBottom: 20 }}>
-          <span>{window.location.href}</span>
-          <button className="btn-secondary" onClick={copyLink}>{copied ? 'Copied!' : 'Copy'}</button>
+        <div className="poll-header-row">
+          <h2>{poll.question}</h2>
+          <button className="btn-secondary" onClick={copyLink}>
+            {copied ? 'Copied!' : 'Copy link'}
+          </button>
         </div>
 
         {!votedOption ? (
