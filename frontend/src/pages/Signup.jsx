@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { api } from '../api.js'
+import BallotIllustration from '../components/BallotIllustration.jsx'
 
 export default function Signup({ onLogin }) {
   const [name, setName] = useState('')
@@ -26,31 +27,38 @@ export default function Signup({ onLogin }) {
   }
 
   return (
-    <div className="container" style={{ maxWidth: 420 }}>
-      <div className="card">
-        <h2>Create an account</h2>
-        <form onSubmit={submit}>
-          <label>Name</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} required />
-          <label>Email</label>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          <label>Password (min 8 characters)</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            minLength={8}
-            required
-          />
-          {error && <p className="error">{error}</p>}
-          <button className="btn-primary" style={{ marginTop: 18, width: '100%' }} disabled={loading}>
-            {loading ? 'Creating…' : 'Sign up'}
-          </button>
-        </form>
-        <p className="muted" style={{ marginTop: 16 }}>
-          Already have an account? <Link to="/login">Log in</Link>
-        </p>
+    <div className="auth-page">
+      <div className="auth-illustration">
+        <BallotIllustration />
+        <p className="auth-tagline">Create a poll. Share the link. Watch it fill in.</p>
+      </div>
+      <div className="auth-form-side">
+        <div className="card" style={{ maxWidth: 380, width: '100%' }}>
+          <h2>Create an account</h2>
+          <form onSubmit={submit}>
+            <label>Name</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} required />
+            <label>Email</label>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            <label>Password (min 8 characters)</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              minLength={8}
+              required
+            />
+            {error && <p className="error">{error}</p>}
+            <button className="btn-primary" style={{ marginTop: 18, width: '100%' }} disabled={loading}>
+              {loading ? 'Creating…' : 'Sign up'}
+            </button>
+          </form>
+          <p className="muted" style={{ marginTop: 16 }}>
+            Already have an account? <Link to="/login">Log in</Link>
+          </p>
+        </div>
       </div>
     </div>
   )
 }
+

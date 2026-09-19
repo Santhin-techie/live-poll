@@ -16,12 +16,15 @@ export default function Dashboard() {
 
   return (
     <div className="container">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2>Your polls</h2>
+      <div className="dashboard-banner">
+        <div>
+          <h2>Your polls</h2>
+          <p className="muted" style={{ margin: '4px 0 0' }}>Every poll you've created, in one place.</p>
+        </div>
         <Link to="/create"><button className="btn-primary">+ New poll</button></Link>
       </div>
 
-      <div className="card" style={{ marginTop: 20 }}>
+      <div className="card">
         {loading && <p className="muted">Loading…</p>}
         {error && <p className="error">{error}</p>}
         {!loading && polls.length === 0 && (

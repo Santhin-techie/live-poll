@@ -286,3 +286,59 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 .poll-list-item:last-child { border-bottom: none; }
 .poll-list-item strong { font-family: var(--serif); font-size: 1.05rem; }
+
+/* ---------- Auth pages (login/signup) ---------- */
+
+.auth-page {
+  display: flex;
+  min-height: calc(100vh - 74px);
+}
+
+.auth-illustration {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  background: var(--navy);
+  background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.06) 1px, transparent 0);
+  background-size: 22px 22px;
+  padding: 48px;
+}
+
+.auth-tagline {
+  font-family: var(--serif);
+  font-size: 1.1rem;
+  color: #e9e2d0;
+  text-align: center;
+  max-width: 260px;
+  line-height: 1.4;
+}
+
+.auth-form-side {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+}
+
+@media (max-width: 780px) {
+  .auth-illustration { display: none; }
+}
+
+/* ---------- Dashboard header banner ---------- */
+
+.dashboard-banner {
+  background: var(--navy);
+  border-bottom: 3px solid var(--brass);
+  padding: 28px 32px;
+  margin: -40px -24px 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dashboard-banner h2 { color: #fff; margin: 0; }
+.dashboard-banner .muted { color: #b7bdca; }
