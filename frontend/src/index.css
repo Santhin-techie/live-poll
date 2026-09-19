@@ -342,3 +342,15 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .dashboard-banner h2 { color: #fff; margin: 0; }
 .dashboard-banner .muted { color: #b7bdca; }
+/* ---------- Buttons sitting on the dark navbar ---------- */
+
+.navbar .btn-secondary {
+  border-color: rgba(255, 255, 255, 0.4);
+  color: #fff;
+}
+
+.navbar .btn-secondary:hover {
+  border-color: #fff;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
