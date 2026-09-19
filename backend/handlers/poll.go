@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -267,13 +268,13 @@ func (h *PollHandler) Vote(c *gin.Context) {
 	}
 
 	// Publish so every connected WebSocket client (across this and any other
-	// backend instance) gets the update — this is the "truly real-time" piece.
+	// backend instance) gets the update via the Hub's own Redis subscription
+	// (see ws.go). Vote never writes to sockets directly — that's what
+	// caused the concurrent-write panic.
 	payload, _ := json.Marshal(results)
-	h.Redis.Publish(ctx, redisChannel(pollID), payload)
-
-	// Also fan out directly through the in-process hub for clients on this instance.
-	h.Hub.Broadcast(pollID, payload)
-
+	if err := h.Redis.Publish(ctx, redisChannel(pollID), payload).Err(); err != nil {
+		log.Printf("publish error: %v", err)
+	}
 	c.JSON(http.StatusOK, results)
 }
 
