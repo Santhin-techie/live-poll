@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -140,7 +139,8 @@ func (h *PollHandler) GetPoll(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"poll": poll, "results": results})
 }
 
-// ListMyPolls returns polls owned by the authenticated user (their dashboard).
+// ListMyPolls returns polls owned by the authenticated user (their dashboard),
+// including each poll's current total vote count read from Redis.
 func (h *PollHandler) ListMyPolls(c *gin.Context) {
 	userIDHex := c.GetString("userID")
 	ownerID, err := primitive.ObjectIDFromHex(userIDHex)
@@ -165,7 +165,58 @@ func (h *PollHandler) ListMyPolls(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, polls)
+	type pollWithStats struct {
+		models.Poll `bson:",inline"`
+		TotalVotes  int `json:"total_votes"`
+	}
+
+	out := make([]pollWithStats, 0, len(polls))
+	for _, p := range polls {
+		total := 0
+		if results, err := h.currentResults(ctx, p.ID.Hex()); err == nil {
+			total = results.Total
+		}
+		out = append(out, pollWithStats{Poll: p, TotalVotes: total})
+	}
+
+	c.JSON(http.StatusOK, out)
+}
+
+// ClosePoll marks a poll closed so it stops accepting votes. Only the poll's
+// owner can do this — verified against the authenticated user, not trusted
+// from the request body.
+func (h *PollHandler) ClosePoll(c *gin.Context) {
+	pollID := c.Param("id")
+	objID, err := primitive.ObjectIDFromHex(pollID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid poll id"})
+		return
+	}
+
+	userIDHex := c.GetString("userID")
+	ownerID, err := primitive.ObjectIDFromHex(userIDHex)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	res, err := h.Polls.UpdateOne(ctx,
+		bson.M{"_id": objID, "owner_id": ownerID},
+		bson.M{"$set": bson.M{"is_closed": true}},
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not close poll"})
+		return
+	}
+	if res.MatchedCount == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "poll not found or not yours"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"closed": true})
 }
 
 type voteRequest struct {
@@ -176,10 +227,6 @@ type voteRequest struct {
 // Mongo (never trusts the client-supplied option id blindly), records the
 // vote for history/de-duplication, then does the *live* part entirely in
 // Redis: HINCRBY the counter and PUBLISH the new snapshot to subscribers.
-// The Hub's own Redis subscription (see hub.go) is the single path that
-// turns this publish into WebSocket broadcasts — Vote itself never touches
-// client connections directly, which avoids duplicate delivery and
-// concurrent writes to the same socket.
 func (h *PollHandler) Vote(c *gin.Context) {
 	pollID := c.Param("id")
 	objID, err := primitive.ObjectIDFromHex(pollID)
@@ -243,10 +290,12 @@ func (h *PollHandler) Vote(c *gin.Context) {
 
 	// The live counter lives in Redis — this is what makes results update
 	// instantly without hitting Mongo on every poll/refresh.
-	if _, err := h.Redis.HIncrBy(ctx, redisCountsKey(pollID), req.OptionID, 1).Result(); err != nil {
+	newCount, err := h.Redis.HIncrBy(ctx, redisCountsKey(pollID), req.OptionID, 1).Result()
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not update live counters"})
 		return
 	}
+	_ = newCount
 
 	results, err := h.currentResults(ctx, pollID)
 	if err != nil {
@@ -256,12 +305,11 @@ func (h *PollHandler) Vote(c *gin.Context) {
 
 	// Publish so every connected WebSocket client (across this and any other
 	// backend instance) gets the update — this is the "truly real-time" piece.
-	// The Hub subscribes to this same channel and is solely responsible for
-	// writing to client sockets (see hub.go's listenRedis/Broadcast).
 	payload, _ := json.Marshal(results)
-	if err := h.Redis.Publish(ctx, redisChannel(pollID), payload).Err(); err != nil {
-		log.Printf("publish error: %v", err)
-	}
+	h.Redis.Publish(ctx, redisChannel(pollID), payload)
+
+	// Also fan out directly through the in-process hub for clients on this instance.
+	h.Hub.Broadcast(pollID, payload)
 
 	c.JSON(http.StatusOK, results)
 }

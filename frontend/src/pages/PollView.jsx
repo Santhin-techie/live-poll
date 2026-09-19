@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { api, pollSocketUrl } from '../api.js'
+import { api, pollSocketUrl, withColdStartHint } from '../api.js'
 
 export default function PollView() {
   const { id } = useParams()
@@ -10,11 +10,13 @@ export default function PollView() {
   const [voting, setVoting] = useState(false)
   const [votedOption, setVotedOption] = useState(null)
   const [connected, setConnected] = useState(false)
+  const [waking, setWaking] = useState(false)
+  const [copied, setCopied] = useState(false)
   const wsRef = useRef(null)
 
   // Initial load: poll metadata + current snapshot.
   useEffect(() => {
-    api.getPoll(id)
+    withColdStartHint(api.getPoll, setWaking)(id)
       .then((data) => {
         setPoll(data.poll)
         setResults(data.results)
@@ -59,13 +61,21 @@ export default function PollView() {
 
   const copyLink = () => {
     navigator.clipboard?.writeText(window.location.href)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1800)
   }
 
   if (error && !poll) {
     return <div className="container"><p className="error">{error}</p></div>
   }
   if (!poll) {
-    return <div className="container"><p className="muted">Loading poll…</p></div>
+    return (
+      <div className="container">
+        <p className="muted">
+          Loading poll…{waking && ' the server is waking up, this can take up to a minute on the free tier.'}
+        </p>
+      </div>
+    )
   }
 
   const total = results?.total || 0
@@ -77,7 +87,7 @@ export default function PollView() {
 
         <div className="share-box" style={{ marginBottom: 20 }}>
           <span>{window.location.href}</span>
-          <button className="btn-secondary" onClick={copyLink}>Copy</button>
+          <button className="btn-secondary" onClick={copyLink}>{copied ? 'Copied!' : 'Copy'}</button>
         </div>
 
         {!votedOption ? (

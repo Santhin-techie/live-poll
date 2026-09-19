@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { api } from '../api.js'
+import { api, withColdStartHint } from '../api.js'
 import BallotIllustration from '../components/BallotIllustration.jsx'
 
 export default function Login({ onLogin }) {
@@ -8,6 +8,7 @@ export default function Login({ onLogin }) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [waking, setWaking] = useState(false)
   const navigate = useNavigate()
 
   const submit = async (e) => {
@@ -15,7 +16,7 @@ export default function Login({ onLogin }) {
     setError('')
     setLoading(true)
     try {
-      const data = await api.login({ email, password })
+      const data = await withColdStartHint(api.login, setWaking)({ email, password })
       onLogin(data.token)
       navigate('/dashboard')
     } catch (err) {
@@ -41,7 +42,7 @@ export default function Login({ onLogin }) {
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
             {error && <p className="error">{error}</p>}
             <button className="btn-primary" style={{ marginTop: 18, width: '100%' }} disabled={loading}>
-              {loading ? 'Logging in…' : 'Log in'}
+              {loading ? (waking ? 'Waking up the server…' : 'Logging in…') : 'Log in'}
             </button>
           </form>
           <p className="muted" style={{ marginTop: 16 }}>

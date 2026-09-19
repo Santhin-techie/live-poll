@@ -30,7 +30,24 @@ export const api = {
   getPoll: (id) => request(`/polls/${id}`),
   vote: (id, optionId) =>
     request(`/polls/${id}/vote`, { method: 'POST', body: JSON.stringify({ option_id: optionId }) }),
+  closePoll: (id) => request(`/polls/${id}/close`, { method: 'PATCH' }),
 };
+
+// Render's free tier spins backends down after inactivity; the first request
+// can take 30-50s to wake it. This wraps any api call and flips a flag if it's
+// taking unusually long, so the UI can show a "waking up" hint instead of
+// looking stuck.
+export function withColdStartHint(promiseFactory, onSlow, delayMs = 4000) {
+  return async (...args) => {
+    const timer = setTimeout(() => onSlow(true), delayMs)
+    try {
+      return await promiseFactory(...args)
+    } finally {
+      clearTimeout(timer)
+      onSlow(false)
+    }
+  }
+}
 
 export function pollSocketUrl(id) {
   const wsBase = API_BASE.replace(/^http/, 'ws');

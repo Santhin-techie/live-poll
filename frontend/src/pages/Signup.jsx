@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { api } from '../api.js'
+import { api, withColdStartHint } from '../api.js'
 import BallotIllustration from '../components/BallotIllustration.jsx'
 
 export default function Signup({ onLogin }) {
@@ -9,6 +9,7 @@ export default function Signup({ onLogin }) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [waking, setWaking] = useState(false)
   const navigate = useNavigate()
 
   const submit = async (e) => {
@@ -16,7 +17,7 @@ export default function Signup({ onLogin }) {
     setError('')
     setLoading(true)
     try {
-      const data = await api.signup({ name, email, password })
+      const data = await withColdStartHint(api.signup, setWaking)({ name, email, password })
       onLogin(data.token)
       navigate('/dashboard')
     } catch (err) {
@@ -50,7 +51,7 @@ export default function Signup({ onLogin }) {
             />
             {error && <p className="error">{error}</p>}
             <button className="btn-primary" style={{ marginTop: 18, width: '100%' }} disabled={loading}>
-              {loading ? 'Creating…' : 'Sign up'}
+              {loading ? (waking ? 'Waking up the server…' : 'Creating…') : 'Sign up'}
             </button>
           </form>
           <p className="muted" style={{ marginTop: 16 }}>

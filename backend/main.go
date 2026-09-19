@@ -54,6 +54,7 @@ func main() {
 		{
 			authGroup.POST("polls", pollHandler.CreatePoll)
 			authGroup.GET("polls", pollHandler.ListMyPolls)
+			authGroup.PATCH("polls/:id/close", pollHandler.ClosePoll)
 		}
 	}
 
