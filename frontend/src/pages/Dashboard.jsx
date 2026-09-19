@@ -1,13 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api, withColdStartHint } from '../api.js'
+import { api, pollSocketUrl, withColdStartHint } from '../api.js'
 
 export default function Dashboard() {
   const [polls, setPolls] = useState([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [waking, setWaking] = useState(false)
-  const [closingId, setClosingId] = useState(null)
+  const [statusChangingId, setStatusChangingId] = useState(null)
+  const [deletingId, setDeletingId] = useState(null)
+  const socketsRef = useRef({}) // pollId -> WebSocket
 
   const loadPolls = () => {
     setLoading(true)
@@ -21,15 +23,70 @@ export default function Dashboard() {
     loadPolls()
   }, [])
 
-  const handleClose = async (id) => {
-    setClosingId(id)
+  // One WebSocket per poll shown on the dashboard, so total_votes stays live
+  // without refreshing. Sockets are opened/closed as the poll list changes,
+  // and all closed on unmount.
+  useEffect(() => {
+    const currentIds = new Set(polls.map((p) => p.id))
+
+    // Open a socket for any poll that doesn't have one yet.
+    polls.forEach((p) => {
+      if (socketsRef.current[p.id]) return
+      const ws = new WebSocket(pollSocketUrl(p.id))
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data)
+          setPolls((prev) =>
+            prev.map((poll) =>
+              poll.id === p.id ? { ...poll, total_votes: data.total } : poll
+            )
+          )
+        } catch (e) {
+          // ignore malformed frames
+        }
+      }
+      socketsRef.current[p.id] = ws
+    })
+
+    // Close sockets for polls no longer in the list (e.g. after delete).
+    Object.keys(socketsRef.current).forEach((id) => {
+      if (!currentIds.has(id)) {
+        socketsRef.current[id].close()
+        delete socketsRef.current[id]
+      }
+    })
+
+    return () => {
+      // Full cleanup on unmount.
+      Object.values(socketsRef.current).forEach((ws) => ws.close())
+      socketsRef.current = {}
+    }
+  }, [polls.map((p) => p.id).join(',')])
+
+  const handleToggleStatus = async (id, currentlyClosed) => {
+    setStatusChangingId(id)
     try {
-      await api.closePoll(id)
-      setPolls((prev) => prev.map((p) => (p.id === id ? { ...p, is_closed: true } : p)))
+      await api.setPollStatus(id, !currentlyClosed)
+      setPolls((prev) =>
+        prev.map((p) => (p.id === id ? { ...p, is_closed: !currentlyClosed } : p))
+      )
     } catch (err) {
       setError(err.message)
     } finally {
-      setClosingId(null)
+      setStatusChangingId(null)
+    }
+  }
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this poll? This cannot be undone.')) return
+    setDeletingId(id)
+    try {
+      await api.deletePoll(id)
+      setPolls((prev) => prev.filter((p) => p.id !== id))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -63,16 +120,23 @@ export default function Dashboard() {
               </div>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
-              {!p.is_closed && (
-                <button
-                  className="btn-secondary"
-                  onClick={() => handleClose(p.id)}
-                  disabled={closingId === p.id}
-                >
-                  {closingId === p.id ? 'Closing…' : 'Close'}
-                </button>
-              )}
-              <Link to={`/polls/${p.id}`}><button className="btn-secondary">Open</button></Link>
+              <button
+                className="btn-secondary"
+                onClick={() => handleToggleStatus(p.id, p.is_closed)}
+                disabled={statusChangingId === p.id}
+              >
+                {statusChangingId === p.id
+                  ? (p.is_closed ? 'Opening…' : 'Closing…')
+                  : (p.is_closed ? 'Reopen' : 'Close')}
+              </button>
+              <Link to={`/polls/${p.id}`}><button className="btn-secondary">View</button></Link>
+              <button
+                className="btn-secondary"
+                onClick={() => handleDelete(p.id)}
+                disabled={deletingId === p.id}
+              >
+                {deletingId === p.id ? 'Deleting…' : 'Delete'}
+              </button>
             </div>
           </div>
         ))}

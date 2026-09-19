@@ -182,43 +182,6 @@ func (h *PollHandler) ListMyPolls(c *gin.Context) {
 	c.JSON(http.StatusOK, out)
 }
 
-// ClosePoll marks a poll closed so it stops accepting votes. Only the poll's
-// owner can do this — verified against the authenticated user, not trusted
-// from the request body.
-func (h *PollHandler) ClosePoll(c *gin.Context) {
-	pollID := c.Param("id")
-	objID, err := primitive.ObjectIDFromHex(pollID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid poll id"})
-		return
-	}
-
-	userIDHex := c.GetString("userID")
-	ownerID, err := primitive.ObjectIDFromHex(userIDHex)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user"})
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
-	defer cancel()
-
-	res, err := h.Polls.UpdateOne(ctx,
-		bson.M{"_id": objID, "owner_id": ownerID},
-		bson.M{"$set": bson.M{"is_closed": true}},
-	)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not close poll"})
-		return
-	}
-	if res.MatchedCount == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "poll not found or not yours"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"closed": true})
-}
-
 type voteRequest struct {
 	OptionID string `json:"option_id" binding:"required"`
 }
@@ -333,4 +296,91 @@ func (h *PollHandler) currentResults(ctx context.Context, pollID string) (models
 func hashVoter(ip, ua, pollID string) string {
 	h := sha256.Sum256([]byte(ip + "|" + ua + "|" + pollID))
 	return hex.EncodeToString(h[:])
+}
+
+type setPollStatusRequest struct {
+	IsClosed bool `json:"is_closed"`
+}
+
+// SetPollStatus opens or closes a poll based on the request body. Only the
+// poll's owner can do this — verified against the authenticated user, not
+// trusted from the request body. Works in both directions, any number of
+// times.
+func (h *PollHandler) SetPollStatus(c *gin.Context) {
+	pollID := c.Param("id")
+	objID, err := primitive.ObjectIDFromHex(pollID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid poll id"})
+		return
+	}
+
+	var req setPollStatusRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	userIDHex := c.GetString("userID")
+	ownerID, err := primitive.ObjectIDFromHex(userIDHex)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	res, err := h.Polls.UpdateOne(ctx,
+		bson.M{"_id": objID, "owner_id": ownerID},
+		bson.M{"$set": bson.M{"is_closed": req.IsClosed}},
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not update poll status"})
+		return
+	}
+	if res.MatchedCount == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "poll not found or not yours"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"is_closed": req.IsClosed})
+}
+
+// DeletePoll permanently removes a poll and its votes. Only the poll's owner
+// can do this — verified against the authenticated user, not trusted from
+// the request body. Also clears the poll's live counters from Redis so no
+// stale data is left behind.
+func (h *PollHandler) DeletePoll(c *gin.Context) {
+	pollID := c.Param("id")
+	objID, err := primitive.ObjectIDFromHex(pollID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid poll id"})
+		return
+	}
+
+	userIDHex := c.GetString("userID")
+	ownerID, err := primitive.ObjectIDFromHex(userIDHex)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	res, err := h.Polls.DeleteOne(ctx, bson.M{"_id": objID, "owner_id": ownerID})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not delete poll"})
+		return
+	}
+	if res.DeletedCount == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "poll not found or not yours"})
+		return
+	}
+
+	// Clean up related data — votes history and the live Redis counters.
+	_, _ = h.Votes.DeleteMany(ctx, bson.M{"poll_id": objID})
+	_ = h.Redis.Del(ctx, redisCountsKey(pollID)).Err()
+
+	c.JSON(http.StatusOK, gin.H{"deleted": true})
 }

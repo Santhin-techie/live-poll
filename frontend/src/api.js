@@ -30,7 +30,12 @@ export const api = {
   getPoll: (id) => request(`/polls/${id}`),
   vote: (id, optionId) =>
     request(`/polls/${id}/vote`, { method: 'POST', body: JSON.stringify({ option_id: optionId }) }),
-  closePoll: (id) => request(`/polls/${id}/close`, { method: 'PATCH' }),
+   setPollStatus: (id, isClosed) =>
+    request(`/polls/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_closed: isClosed }),
+    }),
+  deletePoll: (id) => request(`/polls/${id}`, { method: 'DELETE' }),
 };
 
 // Render's free tier spins backends down after inactivity; the first request
