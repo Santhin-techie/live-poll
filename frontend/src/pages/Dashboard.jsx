@@ -25,7 +25,7 @@ export default function Dashboard() {
         {loading && <p className="muted">Loading…</p>}
         {error && <p className="error">{error}</p>}
         {!loading && polls.length === 0 && (
-          <p className="muted">You haven't created any polls yet.</p>
+          <p className="muted">Nothing here yet — create your first poll to get started.</p>
         )}
         {polls.map((p) => (
           <div className="poll-list-item" key={p.id}>

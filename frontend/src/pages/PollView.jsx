@@ -82,14 +82,14 @@ export default function PollView() {
 
         {!votedOption ? (
           <>
-            {poll.options.map((opt) => (
+            {poll.options.map((opt, i) => (
               <button
                 key={opt.id}
-                className="btn-secondary"
-                style={{ display: 'block', width: '100%', textAlign: 'left', marginTop: 8 }}
+                className="ballot-option"
                 disabled={voting || poll.is_closed}
                 onClick={() => castVote(opt.id)}
               >
+                <span className="ballot-letter">{String.fromCharCode(65 + i)}</span>
                 {opt.text}
               </button>
             ))}
@@ -99,8 +99,8 @@ export default function PollView() {
 
         {error && <p className="error">{error}</p>}
 
-        <h3 style={{ marginTop: 28 }}>
-          <span className="live-dot" style={{ background: connected ? '#3ddc84' : '#666' }} />
+        <h3 className="results-heading">
+          <span className="live-dot" style={{ background: connected ? '#2f7a4f' : '#9a9a9a' }} />
           Live results {connected ? '' : '(reconnecting…)'}
         </h3>
 
